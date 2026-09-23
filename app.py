@@ -2,9 +2,13 @@ import os
 import sqlite3
 import pandas as pd
 import streamlit as st
+from openai import OpenAI
 
-# Securely retrieve the API Key from Streamlit Secrets
+# Securely retrieve the API Key from Streamlit Secrets or Environment Variables
 api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+
+# Initialize OpenAI Client
+client = OpenAI(api_key=api_key) if api_key else None
 
 # Configure Page Layout
 st.set_page_config(page_title="OSU P-Card Audit Portal", page_icon="🔍", layout="wide")
@@ -14,6 +18,20 @@ DB_PATH = "pcards.db"
 def run_query(query, params=()):
     with sqlite3.connect(DB_PATH) as conn:
         return pd.read_sql_query(query, conn, params=params)
+
+# System prompt for dynamic SQL generation
+SYSTEM_PROMPT = """
+You are an expert SQLite translator for a table named 'pcards'.
+Return ONLY valid SQL queries without markdown formatting, backticks, or explanatory text.
+
+Table Schema:
+pcards(FullName, Vendor, Amount, TransactionDate, Description, MCC, Year, Month)
+
+Rules:
+1. Parse numbers in the prompt carefully (e.g., 'top 5' or 'top five' must use 'LIMIT 5').
+2. If no limit or count is requested in the prompt, default to 'LIMIT 10'.
+3. Always ensure the generated SQL is valid SQLite.
+"""
 
 # Header
 st.title("🔍 Oklahoma State University — P-Card Audit Portal")
@@ -30,36 +48,42 @@ with tab1:
     st.markdown("""
     Ask questions in plain English about the 2014 P-Card dataset:
     *Examples:*
-    - *Show top cardholders by spending*
+    - *Show top 5 cardholders by spending*
     - *Show vendor totals over $50,000*
     """)
     
-    user_prompt = st.text_input("Enter your audit question:", placeholder="e.g., Show top cardholders by spending")
+    user_prompt = st.text_input("Enter your audit question:", placeholder="e.g., Show top 5 cardholders by spending")
     
     if st.button("Run Query", key="nl_search"):
         if not user_prompt:
             st.warning("Please enter a question first.")
+        elif not client:
+            st.error("OpenAI API Key is missing. Please check your Streamlit secrets.")
         else:
-            prompt_lower = user_prompt.lower()
-            if "top" in prompt_lower and "cardholder" in prompt_lower:
-                sql_generated = "SELECT FullName, SUM(Amount) AS TotalSpent FROM pcards WHERE Year = 2014 GROUP BY FullName ORDER BY TotalSpent DESC LIMIT 10;"
-            elif "vendor" in prompt_lower:
-                sql_generated = "SELECT Vendor, COUNT(*) AS TxCount, SUM(Amount) AS TotalSpent FROM pcards WHERE Year = 2014 GROUP BY Vendor ORDER BY TotalSpent DESC LIMIT 10;"
-            elif "5000" in prompt_lower or "over $5,000" in prompt_lower:
-                sql_generated = "SELECT Amount, FullName, Vendor, Description, TransactionDate FROM pcards WHERE Year = 2014 AND Amount > 5000 ORDER BY Amount DESC;"
-            else:
-                sql_generated = f"SELECT FullName, Vendor, Amount, TransactionDate, Description, MCC FROM pcards WHERE Year = 2014 AND (LOWER(Description) LIKE '%{user_prompt}%' OR LOWER(Vendor) LIKE '%{user_prompt}%') LIMIT 50;"
-            
-            st.subheader("Generated SQL Query")
-            st.code(sql_generated, language="sql")
-            
             try:
+                # 1. Call OpenAI API to convert user prompt into SQL
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt}
+                    ]
+                )
+                
+                # 2. Extract and sanitize SQL string
+                sql_generated = response.choices[0].message.content.strip()
+                sql_generated = sql_generated.replace("```sql", "").replace("```", "").strip()
+                
+                st.subheader("Generated SQL Query")
+                st.code(sql_generated, language="sql")
+                
+                # 3. Execute query and display results
                 df_result = run_query(sql_generated)
                 st.subheader(f"Results ({len(df_result)} records found)")
                 st.dataframe(df_result, use_container_width=True)
+                
             except Exception as e:
                 st.error(f"Error executing query: {e}")
-
 # ==============================================================================
 # TAB 2: PROHIBITED PURCHASES DASHBOARD
 # ==============================================================================
@@ -113,15 +137,3 @@ with tab2:
         
         st.subheader("Flagged Transaction Details")
         st.dataframe(df_audit, use_container_width=True)
-
-
-# System prompt inside your OpenAI API call function
-system_prompt = """
-You are an expert SQLite translator for a table named 'pcards'.
-Return ONLY valid SQL queries. Do not include markdown formatting, backticks, or explanatory text.
-Table Schema:
-pcards(FullName, Vendor, Amount, TransactionDate, Description, MCC, Year, Month)
-Rules:
-1. Pay close attention to numbers in the prompt (e.g., if asked for 'top 5', use 'LIMIT 5').
-2. If no limit is specified, default to 'LIMIT 10'.
-"""

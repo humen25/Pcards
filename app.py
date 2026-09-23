@@ -122,3 +122,12 @@ Return ONLY valid SQL queries. Do not include markdown formatting, backticks, or
 Table Schema:
 pcards(FullName, Vendor, Amount, TransactionDate, Description, MCC, Year, Month)
 """
+
+# Extract the generated text from OpenAI
+sql_query = response.choices[0].message.content.strip()
+
+# Strip out Markdown code block wrappers
+sql_query = sql_query.replace("```sql", "").replace("```", "").strip()
+
+# Execute the sanitized query against pcards.db
+df_results = run_query(sql_query)

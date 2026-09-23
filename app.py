@@ -10,7 +10,7 @@ api_key = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY") o
 # Initialize Gemini Model
 if api_key:
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-latest")
+    model = genai.GenerativeModel("gemini-1.5-flash")
 else:
     model = None
 

@@ -122,19 +122,3 @@ Return ONLY valid SQL queries. Do not include markdown formatting, backticks, or
 Table Schema:
 pcards(FullName, Vendor, Amount, TransactionDate, Description, MCC, Year, Month)
 """
-
-# Call the OpenAI API (creates the 'response' variable)
-response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_query}
-    ]
-)
-
-# Extract and sanitize the SQL query (Line 127)
-sql_query = response.choices[0].message.content.strip()
-sql_query = sql_query.replace("```sql", "").replace("```", "").strip()
-
-# 3. Execute the SQL query against the database
-results = run_query(sql_query)

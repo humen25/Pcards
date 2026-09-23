@@ -34,7 +34,7 @@ with tab1:
     - *Show vendor totals over $50,000*
     """)
     
-    user_prompt = st.text_input("Enter your audit question:", placeholder="e.g., top 10 transactions by amount")
+    user_prompt = st.text_input("Enter your audit question:", placeholder="e.g., Show top cardholders by spending")
     
     if st.button("Run Query", key="nl_search"):
         if not user_prompt:

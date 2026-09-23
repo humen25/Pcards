@@ -7,10 +7,26 @@ import google.generativeai as genai
 # Retrieve Google AI Studio API Key from Streamlit Secrets or Environment Variables
 api_key = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
-# Initialize Gemini Model
+SYSTEM_PROMPT = """
+You are an expert SQLite translator for a table named 'pcards'.
+Return ONLY valid SQL SELECT queries without markdown formatting, backticks, or explanatory text.
+
+Table Schema:
+pcards(FullName, Vendor, Amount, TransactionDate, Description, MCC, Year, Month)
+
+Rules:
+1. Parse numbers in the prompt carefully (e.g., 'top 5' or 'top five' must use 'LIMIT 5').
+2. If no limit or count is requested in the prompt, default to 'LIMIT 10'.
+3. Always ensure the generated SQL is valid SQLite and ONLY uses SELECT statements.
+"""
+
+# Initialize Gemini Model with System Instruction
 if api_key:
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-3.1-pro")
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction=SYSTEM_PROMPT
+    )
 else:
     model = None
 
@@ -22,19 +38,6 @@ DB_PATH = "pcards.db"
 def run_query(query, params=()):
     with sqlite3.connect(DB_PATH) as conn:
         return pd.read_sql_query(query, conn, params=params)
-
-SYSTEM_PROMPT = """
-You are an expert SQLite translator for a table named 'pcards'.
-Return ONLY valid SQL queries without markdown formatting, backticks, or explanatory text.
-
-Table Schema:
-pcards(FullName, Vendor, Amount, TransactionDate, Description, MCC, Year, Month)
-
-Rules:
-1. Parse numbers in the prompt carefully (e.g., 'top 5' or 'top five' must use 'LIMIT 5').
-2. If no limit or count is requested in the prompt, default to 'LIMIT 10'.
-3. Always ensure the generated SQL is valid SQLite.
-"""
 
 # Header
 st.title("🔍 Oklahoma State University — P-Card Audit Portal")
@@ -64,9 +67,8 @@ with tab1:
             st.error("Google AI Studio API Key is missing. Please check your Streamlit secrets.")
         else:
             try:
-                # 1. Combine system prompt and user question for Gemini
-                full_prompt = f"{SYSTEM_PROMPT}\n\nUser Question: {user_prompt}"
-                response = model.generate_content(full_prompt)
+                # 1. Call Gemini model
+                response = model.generate_content(user_prompt)
                 
                 # 2. Extract and sanitize SQL string
                 sql_generated = response.text.strip()
@@ -81,7 +83,10 @@ with tab1:
                 st.dataframe(df_result, use_container_width=True)
                 
             except Exception as e:
-                st.error(f"Error executing query: {e}")
+                if "429" in str(e) or "quota" in str(e).lower():
+                    st.warning("⏳ **Rate limit reached:** Google AI Studio allows a limited number of requests per minute on the free tier. Please wait ~30 seconds and try again.")
+                else:
+                    st.error(f"Error executing query: {e}")
 
 # ==============================================================================
 # TAB 2: PROHIBITED PURCHASES DASHBOARD

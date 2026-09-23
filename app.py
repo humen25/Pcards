@@ -113,3 +113,12 @@ with tab2:
         
         st.subheader("Flagged Transaction Details")
         st.dataframe(df_audit, use_container_width=True)
+
+
+# System prompt inside your OpenAI API call function
+system_prompt = """
+You are an expert SQLite translator for a table named 'pcards'.
+Return ONLY valid SQL queries. Do not include markdown formatting, backticks, or explanatory text.
+Table Schema:
+pcards(FullName, Vendor, Amount, TransactionDate, Description, MCC, Year, Month)
+"""

@@ -123,11 +123,18 @@ Table Schema:
 pcards(FullName, Vendor, Amount, TransactionDate, Description, MCC, Year, Month)
 """
 
-# Extract the generated text from OpenAI
-sql_query = response.choices[0].message.content.strip()
+# Call the OpenAI API (creates the 'response' variable)
+response = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_query}
+    ]
+)
 
-# Strip out Markdown code block wrappers
+# Extract and sanitize the SQL query (Line 127)
+sql_query = response.choices[0].message.content.strip()
 sql_query = sql_query.replace("```sql", "").replace("```", "").strip()
 
-# Execute the sanitized query against pcards.db
-df_results = run_query(sql_query)
+# 3. Execute the SQL query against the database
+results = run_query(sql_query)

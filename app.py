@@ -3,6 +3,9 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 
+# Securely retrieve the API Key from Streamlit Secrets
+api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+
 # Configure Page Layout
 st.set_page_config(page_title="OSU P-Card Audit Portal", page_icon="🔍", layout="wide")
 
@@ -28,7 +31,6 @@ with tab1:
     Ask questions in plain English about the 2014 P-Card dataset:
     *Examples:*
     - *Show top cardholders by spending*
-    - *Which transactions exceeded $5,000?*
     - *Show vendor totals over $50,000*
     """)
     

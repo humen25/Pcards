@@ -2,13 +2,17 @@ import os
 import sqlite3
 import pandas as pd
 import streamlit as st
-from openai import OpenAI
+import google.generativeai as genai
 
-# Securely retrieve the API Key from Streamlit Secrets or Environment Variables
-api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+# Retrieve Google AI Studio API Key from Streamlit Secrets or Environment Variables
+api_key = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
-# Initialize OpenAI Client
-client = OpenAI(api_key=api_key) if api_key else None
+# Initialize Gemini Model
+if api_key:
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+else:
+    model = None
 
 # Configure Page Layout
 st.set_page_config(page_title="OSU P-Card Audit Portal", page_icon="🔍", layout="wide")
@@ -19,7 +23,6 @@ def run_query(query, params=()):
     with sqlite3.connect(DB_PATH) as conn:
         return pd.read_sql_query(query, conn, params=params)
 
-# System prompt for dynamic SQL generation
 SYSTEM_PROMPT = """
 You are an expert SQLite translator for a table named 'pcards'.
 Return ONLY valid SQL queries without markdown formatting, backticks, or explanatory text.
@@ -57,21 +60,16 @@ with tab1:
     if st.button("Run Query", key="nl_search"):
         if not user_prompt:
             st.warning("Please enter a question first.")
-        elif not client:
-            st.error("OpenAI API Key is missing. Please check your Streamlit secrets.")
+        elif not model:
+            st.error("Google AI Studio API Key is missing. Please check your Streamlit secrets.")
         else:
             try:
-                # 1. Call OpenAI API to convert user prompt into SQL
-                response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt}
-                    ]
-                )
+                # 1. Combine system prompt and user question for Gemini
+                full_prompt = f"{SYSTEM_PROMPT}\n\nUser Question: {user_prompt}"
+                response = model.generate_content(full_prompt)
                 
                 # 2. Extract and sanitize SQL string
-                sql_generated = response.choices[0].message.content.strip()
+                sql_generated = response.text.strip()
                 sql_generated = sql_generated.replace("```sql", "").replace("```", "").strip()
                 
                 st.subheader("Generated SQL Query")
@@ -84,6 +82,7 @@ with tab1:
                 
             except Exception as e:
                 st.error(f"Error executing query: {e}")
+
 # ==============================================================================
 # TAB 2: PROHIBITED PURCHASES DASHBOARD
 # ==============================================================================

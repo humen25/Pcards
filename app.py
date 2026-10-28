@@ -16,7 +16,7 @@ pcards(FullName, Vendor, Amount, TransactionDate, Description, MCC, Year, Month)
 
 Rules:
 1. Parse numbers in the prompt carefully (e.g., 'top 5' or 'top five' must use 'LIMIT 5').
-2. If no limit or count is requested in the prompt, default to 'LIMIT 10'.
+2. Do NOT add a LIMIT clause unless the user explicitly requests a specific count or limit (e.g., 'top 10', 'first 5').
 3. Always ensure the generated SQL is valid SQLite and ONLY uses SELECT statements.
 """
 
